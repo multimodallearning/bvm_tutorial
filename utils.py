@@ -7,6 +7,31 @@ import warnings
 warnings.filterwarnings("ignore")
 import sys
 
+
+#some helper functions for visualisation (not really needed)
+def labelMatrixOneHot(segmentation, label_num):
+    B, H, W = segmentation.size()
+    values = segmentation.view(B,1,H,W).expand(B,label_num,H,W)
+    linspace = torch.linspace(0, label_num-1, label_num).long().view(1,label_num,1,1).expand(B,label_num,H,W)
+    matrix = (values.float()==linspace.float()).float()
+    return matrix
+  
+def overlaySegment(gray1,seg1,flag=False):
+    H, W = seg1.squeeze().size()
+    colors=torch.FloatTensor([0,0,0,199,67,66,225,140,154,78,129,170,45,170,170,240,110,38,111,163,91,235,175,86,202,255,52,162,0,183]).view(-1,3)/255.0
+    segs1 = labelMatrixOneHot(seg1.unsqueeze(0),8)
+
+    seg_color = torch.mm(segs1.view(8,-1).t(),colors[:8,:]).view(H,W,3)
+    alpha = torch.clamp(1.0 - 0.5*(seg1>0).float(),0,1.0)
+
+    overlay = (gray1*alpha).unsqueeze(2) + seg_color*(1.0-alpha).unsqueeze(2)
+    if(flag):
+        plt.imshow((overlay).numpy())
+        plt.show()
+    return overlay
+
+
+
 def init_weights(m):
     if isinstance(m, nn.Linear) or isinstance(m, nn.Conv3d) or isinstance(m, nn.ConvTranspose3d):
         nn.init.xavier_normal_(m.weight)
