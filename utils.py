@@ -297,3 +297,25 @@ def label_warp(img, id_field, param_field):
                                            padding_mode="border",
                                            mode='nearest') # HERE: nearest neighbor
   return warped
+
+def jacobian_determinant_3d(dense_flow):
+    B,_,H,W,D = dense_flow.size()
+    
+    dense_pix = dense_flow.to(dense_flow.device).flip(1)/(torch.Tensor([H-1,W-1,D-1])/2).view(1,3,1,1,1)
+    gradz = nn.Conv3d(3,3,(3,1,1),padding=(1,0,0),bias=False,groups=3)
+    gradz.weight.data[:,0,:,0,0] = torch.tensor([-0.5,0,0.5]).view(1,3).repeat(3,1)
+    gradz.to(dense_flow.device)
+    grady = nn.Conv3d(3,3,(1,3,1),padding=(0,1,0),bias=False,groups=3)
+    grady.weight.data[:,0,0,:,0] = torch.tensor([-0.5,0,0.5]).view(1,3).repeat(3,1)
+    grady.to(dense_flow.device)
+    gradx = nn.Conv3d(3,3,(1,1,3),padding=(0,0,1),bias=False,groups=3)
+    gradx.weight.data[:,0,0,0,:] = torch.tensor([-0.5,0,0.5]).view(1,3).repeat(3,1)
+    gradx.to(dense_flow.device)
+    with torch.no_grad():
+        jacobian = torch.cat((gradz(dense_pix),grady(dense_pix),gradx(dense_pix)),0)+torch.eye(3,3).view(3,3,1,1,1).to(dense_flow.device)
+        jacobian = jacobian[:,:,2:-2,2:-2,2:-2]
+        jac_det = jacobian[0,0,:,:,:]*(jacobian[1,1,:,:,:]*jacobian[2,2,:,:,:]-jacobian[1,2,:,:,:]*jacobian[2,1,:,:,:])-\
+        jacobian[1,0,:,:,:]*(jacobian[0,1,:,:,:]*jacobian[2,2,:,:,:]-jacobian[0,2,:,:,:]*jacobian[2,1,:,:,:])+\
+        jacobian[2,0,:,:,:]*(jacobian[0,1,:,:,:]*jacobian[1,2,:,:,:]-jacobian[0,2,:,:,:]*jacobian[1,1,:,:,:])
+
+    return jac_det
