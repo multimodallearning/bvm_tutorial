@@ -123,11 +123,11 @@ class Logger(object):
 
 
 # Custom overlay function for Part1     
-def overlaySegment_part1(img, seg, alpha=0.5):
-  overlay = img.unsqueeze(2).expand(img.size(0), img.size(1), 3).detach().numpy()/2000
-  label_r = seg.unsqueeze(2).expand(seg.size(0), seg.size(1), 3).detach().numpy()*alpha
-  label_r[:, :, 0] = label_r[:, :, 0]**(1/2)
-  overlay[label_r > 0.5] = (1-alpha)*overlay[label_r > 0.5] + label_r[label_r > 0.5]
+def overlaySegment_part1(img, seg, alpha=0.75):
+  overlay = img.unsqueeze(2).expand(img.size(0), img.size(1), 3).detach().numpy()/torch.max(img).detach().cpu().numpy()
+  label_r = seg.unsqueeze(2).expand(seg.size(0), seg.size(1), 3).detach().numpy()*0.5
+  label_r[:, :, 0] = label_r[:, :, 0]*2
+  overlay[label_r > 0.5] = (1-alpha)*overlay[label_r > 0.5] + alpha*label_r[label_r > 0.5]
   return overlay
 
 # Custom plot function for Part1
