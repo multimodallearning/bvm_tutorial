@@ -6,6 +6,7 @@ import numpy as np
 import warnings
 warnings.filterwarnings("ignore")
 import sys
+import nibabel as nib
 
 
 #some helper functions for visualisation (not really needed)
