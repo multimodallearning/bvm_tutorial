@@ -120,3 +120,33 @@ class Logger(object):
     def saveCurrentResults(self):
         self.log.close()
         self.log = open(self.resultFilePath, 'a')
+
+
+# Custom overlay function for Part1     
+def overlaySegment_part1(img, seg, alpha=0.5):
+  overlay = img.unsqueeze(2).expand(img.size(0), img.size(1), 3).detach().numpy()/2000
+  label_r = seg.unsqueeze(2).expand(seg.size(0), seg.size(1), 3).detach().numpy()*alpha
+  label_r[:, :, 0] = label_r[:, :, 0]**(1/2)
+  overlay[label_r > 0.5] = (1-alpha)*overlay[label_r > 0.5] + label_r[label_r > 0.5]
+  return overlay
+
+# Custom plot function for Part1
+def visualise_sample_part1(axs, sample, result, is_training, epoch, every_epoch, z_slice):
+  """Imshow first sample of batch"""
+  offset = 0
+  phase = 'training'
+  if not is_training:
+    phase = 'validation'
+    offset = 2
+    
+  image = sample['image'][0, 0, z_slice, :, :].cpu()
+  label = sample['label'][0, 0, z_slice, :, :].cpu()
+  preds = (result.detach()[0, 0, z_slice, :, :].cpu() > 0).float()
+  
+  axs[epoch//every_epoch][0 + offset].imshow(overlaySegment_part1(image, label))
+  axs[epoch//every_epoch][0 + offset].set_title(str(epoch) + ': sample ' + phase + ' label')
+  axs[epoch//every_epoch][0 + offset].grid(False)
+  axs[epoch//every_epoch][1 + offset].imshow(overlaySegment_part1(image, preds))
+  axs[epoch//every_epoch][1 + offset].set_title(str(epoch) + ': sample ' + phase + ' prediction')
+  axs[epoch//every_epoch][1 + offset].grid(False)
+  return axs
