@@ -150,3 +150,112 @@ def visualise_sample_part1(axs, sample, result, is_training, epoch, every_epoch,
   axs[epoch//every_epoch][1 + offset].set_title(str(epoch) + ': sample ' + phase + ' prediction')
   axs[epoch//every_epoch][1 + offset].grid(False)
   return axs
+
+
+# just a copied helper function from the last notebook...
+# used to downscale the 3D volumes
+class Scale(object):
+  """Scale tensors spatially."""
+
+  def __init__(self, width=1, height=1, depth=1):
+    assert width or height or depth
+    self.width = width
+    self.height = height
+    self.depth = depth
+
+  def __call__(self, sample):
+    sample['image'] = F.interpolate(
+      sample['image'],
+      scale_factor=(self.depth, self.height, self.width),
+      mode='trilinear'
+    )
+
+    sample['label'] = F.interpolate(
+      sample['label'].float(),
+      scale_factor=(self.depth, self.height, self.width),
+      mode='nearest'
+    ).long()
+
+    return sample
+
+def loadRegData(str_fix_img, str_fix_label, str_mov_img, str_mov_label):
+  fixed_img = nib.load(str_fix_img).get_data()
+  fixed_lab = nib.load(str_fix_label).get_data()
+
+  moving_img = nib.load(str_mov_img).get_data()
+  moving_lab = nib.load(str_mov_label).get_data()
+
+  # as in the first part of the tutorial, we switch axes and add channel & batch
+  # dimensions to our tensors
+
+  fixed_img = torch.from_numpy(fixed_img).permute(2,1,0).unsqueeze(0).unsqueeze(0)
+  fixed_lab = torch.from_numpy(fixed_lab).permute(2,1,0).unsqueeze(0).unsqueeze(0).float()
+
+  moving_img = torch.from_numpy(moving_img).permute(2,1,0).unsqueeze(0).unsqueeze(0)
+  moving_lab = torch.from_numpy(moving_lab).permute(2,1,0).unsqueeze(0).unsqueeze(0).float()
+
+  # also, we subsample the images with the function from part 1...
+  fixed_sample = {'image': fixed_img, 'label': fixed_lab}
+  moving_sample = {'image': moving_img, 'label': moving_lab}
+
+  Scale_03 = Scale(0.3,0.3,0.3)
+  fixed_sample_sub = Scale_03(fixed_sample)
+  moving_sample_sub = Scale_03(moving_sample)
+
+  fixed_img = fixed_sample_sub['image']
+  fixed_lab = fixed_sample_sub['label'].float()
+  moving_img = moving_sample_sub['image']
+  moving_lab = moving_sample_sub['label'].float()
+  
+  sz_0_max = torch.max(torch.Tensor([fixed_img.size(2), moving_img.size(2)])).item()
+  sz_1_max = torch.max(torch.Tensor([fixed_img.size(3), moving_img.size(3)])).item()
+  sz_2_max = torch.max(torch.Tensor([fixed_img.size(4), moving_img.size(4)])).item()
+  
+  p_fix_0 = int(sz_0_max - fixed_img.size(2))
+  p_fix_1 = int(sz_1_max - fixed_img.size(3))
+  p_fix_2 = int(sz_2_max - fixed_img.size(4))
+  
+  p_mov_0 = int(sz_0_max - moving_img.size(2))
+  p_mov_1 = int(sz_1_max - moving_img.size(3))
+  p_mov_2 = int(sz_2_max - moving_img.size(4))
+  
+  p3d_fix = (0, p_fix_2, 0, p_fix_1, 0, p_fix_0)
+  p3d_mov = (0, p_mov_2, 0, p_mov_1, 0, p_mov_0)
+  
+  fixed_img = torch.nn.functional.pad(fixed_img, p3d_fix,'replicate')
+  fixed_lab = torch.nn.functional.pad(fixed_lab, p3d_fix,'replicate')
+  
+  moving_img = torch.nn.functional.pad(moving_img, p3d_mov,'replicate')
+  moving_lab = torch.nn.functional.pad(moving_lab, p3d_mov,'replicate')
+  
+  return fixed_img, fixed_lab, moving_img, moving_lab
+  
+def MINDSSC3d(img_in,kernel_hw=2, delta=3):
+  d = delta
+  H = fixed_image.size(2); W = fixed_image.size(3); D = fixed_image.size(4)
+  theta_ssc = torch.Tensor(2,12,3)
+  theta_ssc[0,:,0] = torch.Tensor([-d,-d, 0, 0, 0, 0, 0, 0, 0, 0,+d,+d])/H 
+  theta_ssc[0,:,1] = torch.Tensor([ 0, 0, 0, 0,+d,+d,-d,-d, 0, 0, 0, 0])/W
+  theta_ssc[0,:,2] = torch.Tensor([ 0, 0,-d,-d, 0, 0, 0, 0,+d,+d, 0, 0])/D
+
+  theta_ssc[1,:,0] = torch.Tensor([ 0, 0, 0,+d, 0, 0,-d, 0,-d,+d, 0, 0])/H
+  theta_ssc[1,:,1] = torch.Tensor([ 0,+d,-d, 0, 0, 0, 0, 0, 0, 0,-d,+d])/W
+  theta_ssc[1,:,2] = torch.Tensor([-d, 0, 0, 0,-d,+d, 0,+d, 0, 0, 0, 0])/D
+
+  theta_ssc = nn.Parameter(theta_ssc+torch.randn(2,12,3)*0.00).cuda()
+    
+  C = theta_ssc.size(1)
+  H = img_in.size(2); W = img_in.size(3); D = img_in.size(4)
+  grid_x, grid_y, grid_z = torch.meshgrid((torch.linspace(-1,1,H),torch.linspace(-1,1,W),torch.linspace(-1,1,D)))
+  grid_x = grid_x.contiguous();grid_y = grid_y.contiguous();grid_z = grid_z.contiguous()
+  grid_xyz = torch.stack((grid_z.view(1,1,-1,1),grid_y.view(1,1,-1,1),grid_x.view(1,1,-1,1)),4).cuda()
+
+  sampled = F.grid_sample(img_in,grid_xyz + theta_ssc[0,:,:].view(1,-1,1,1,3)).view(1,C,H,W,D)
+  sampled -= F.grid_sample(img_in,grid_xyz + theta_ssc[1,:,:].view(1,-1,1,1,3)).view(1,C,H,W,D)
+  mind = F.avg_pool3d(torch.abs(sampled)**2,kernel_hw*2+1,stride=1,padding=kernel_hw)
+  mind -= torch.min(mind,1,keepdim=True)[0]   
+  mind /= (torch.sum(mind,1,keepdim=True)+0.001)
+  mind = torch.exp(-mind)
+  del sampled; del grid_xyz
+  torch.cuda.empty_cache()
+  return mind
