@@ -233,7 +233,7 @@ def loadRegData(str_fix_img, str_fix_label, str_mov_img, str_mov_label):
   
 def MINDSSC3d(img_in,kernel_hw=2, delta=3):
   d = delta
-  H = fixed_image.size(2); W = fixed_image.size(3); D = fixed_image.size(4)
+  H = img_in.size(2); W = img_in.size(3); D = img_in.size(4)
   theta_ssc = torch.Tensor(2,12,3)
   theta_ssc[0,:,0] = torch.Tensor([-d,-d, 0, 0, 0, 0, 0, 0, 0, 0,+d,+d])/H 
   theta_ssc[0,:,1] = torch.Tensor([ 0, 0, 0, 0,+d,+d,-d,-d, 0, 0, 0, 0])/W
