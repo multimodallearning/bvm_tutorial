@@ -259,3 +259,41 @@ def MINDSSC3d(img_in,kernel_hw=2, delta=3):
   del sampled; del grid_xyz
   torch.cuda.empty_cache()
   return mind
+
+def img_warp(img, id_field, param_field):
+  # expects the image to warp, the full resolution identity field
+  # and the coarser param_field containing the displacments
+  
+  # 1) upsamples the coarse grid to the same resolution as the image resolution
+  param_field = param_field.permute(0, 4, 1, 2, 3)
+  param_field = torch.nn.functional.interpolate(param_field,
+                                                size=(img.size(2), img.size(3), img.size(4)),
+                                                mode='trilinear', align_corners=True)
+  # 2) smoothes the field... (also a kind of regularisation)
+  smoother = torch.nn.Sequential(torch.nn.AvgPool3d(kernel_size=5, stride=1, padding=2),
+                                 torch.nn.AvgPool3d(kernel_size=5, stride=1, padding=2),
+                                 torch.nn.AvgPool3d(kernel_size=5, stride=1, padding=2))
+  param_field = smoother(param_field)
+  param_field = param_field.permute(0, 2, 3, 4, 1)
+  # 3) employing grid_sampler to interpolate off-grid image values
+  warped = torch.nn.functional.grid_sample(img, param_field + id_field,
+                                           padding_mode="border")
+  return warped
+
+def label_warp(img, id_field, param_field):
+  # same as above, but the grid_sampling uses nearest neighbor interpolation
+  # to preserve labels -> no interpolation between 0 & 1 e.g. and "adding"
+  # false labels as 0.5
+  param_field = param_field.permute(0, 4, 1, 2, 3)
+  param_field = torch.nn.functional.interpolate(param_field,
+                                                size=(img.size(2), img.size(3), img.size(4)),
+                                                mode='trilinear', align_corners=True)
+  smoother = torch.nn.Sequential(torch.nn.AvgPool3d(kernel_size=5, stride=1, padding=2),
+                                 torch.nn.AvgPool3d(kernel_size=5, stride=1, padding=2),
+                                 torch.nn.AvgPool3d(kernel_size=5, stride=1, padding=2))
+  param_field = smoother(param_field)
+  param_field = param_field.permute(0, 2, 3, 4, 1)
+  warped = torch.nn.functional.grid_sample(img, param_field + id_field,
+                                           padding_mode="border",
+                                           mode='nearest') # HERE: nearest neighbor
+  return warped
