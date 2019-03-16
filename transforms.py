@@ -62,7 +62,7 @@ class Scale(object):
 
         return sample
 
-
+    
 class AugmentAffine(object):
     """Author: Mattias P Heinrich"""
 
@@ -72,7 +72,7 @@ class AugmentAffine(object):
     def __call__(self, sample):
         img, seg = augmentAffine(sample['image'], sample['label'].squeeze(1), self.strength)
         sample['image'] = img
-        sample['label'] = seg
+        sample['label'] = seg.unsqueeze(1)
         return sample
 
 
