@@ -70,7 +70,7 @@ class AugmentAffine(object):
         self.strength = strength
 
     def __call__(self, sample):
-        img, seg = augmentAffine(sample['image'], sample['label'], self.strength)
+        img, seg = augmentAffine(sample['image'], sample['label'].squeeze(1), self.strength)
         sample['image'] = img
         sample['label'] = seg
         return sample
