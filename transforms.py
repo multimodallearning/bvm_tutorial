@@ -1,5 +1,5 @@
 import torch
-import utils
+import bvm_tutorial.utils
 import warnings
 warnings.filterwarnings("ignore")
 
