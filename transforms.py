@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch.nn import ConstantPad3d as Pad
-#from bvm_tutorial.utils import augmentAffine
+from bvm_tutorial.utils import augmentAffine
 import warnings
 warnings.filterwarnings("ignore")
 
