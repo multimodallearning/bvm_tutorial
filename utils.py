@@ -75,6 +75,24 @@ class Scale(object):
     ).long()
 
     return sample
+  
+def augmentAffine(img_in, seg_in, strength=0.05):
+    """
+    3D affine augmentation on image and segmentation mini-batch on GPU.
+    (affine transf. is centered: trilinear interpolation and zero-padding used for sampling)
+    :input: img_in batch (torch.cuda.FloatTensor), seg_in batch (torch.cuda.LongTensor)
+    :return: augmented BxCxTxHxW image batch (torch.cuda.FloatTensor), augmented BxTxHxW seg batch (torch.cuda.LongTensor)
+    """
+    B,C,D,H,W = img_in.size()
+    affine_matrix = (torch.eye(3,4).unsqueeze(0) + torch.randn(B, 3, 4) * strength).to(img_in.device)
+
+    meshgrid = F.affine_grid(affine_matrix,torch.Size((B,1,D,H,W)))
+
+    img_out = F.grid_sample(img_in, meshgrid,padding_mode='border')
+    seg_out = F.grid_sample(seg_in.float().unsqueeze(1), meshgrid, mode='nearest').long().squeeze(1)
+
+    return img_out, seg_out
+
 
 def loadRegData(str_fix_img, str_fix_label, str_mov_img, str_mov_label):
   fixed_img = nib.load(str_fix_img).get_data()
