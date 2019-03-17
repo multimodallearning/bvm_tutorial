@@ -119,29 +119,26 @@ def loadRegData(str_fix_img, str_fix_label, str_mov_img, str_mov_label):
 def MINDSSC3d(img_in,kernel_hw=2, delta=3):
   d = delta
   H = img_in.size(2); W = img_in.size(3); D = img_in.size(4)
+  #define spatial offset layout for 12 self-similarity patches
   theta_ssc = torch.Tensor(2,12,3)
   theta_ssc[0,:,0] = torch.Tensor([-d,-d, 0, 0, 0, 0, 0, 0, 0, 0,+d,+d])/H 
   theta_ssc[0,:,1] = torch.Tensor([ 0, 0, 0, 0,+d,+d,-d,-d, 0, 0, 0, 0])/W
   theta_ssc[0,:,2] = torch.Tensor([ 0, 0,-d,-d, 0, 0, 0, 0,+d,+d, 0, 0])/D
-
   theta_ssc[1,:,0] = torch.Tensor([ 0, 0, 0,+d, 0, 0,-d, 0,-d,+d, 0, 0])/H
   theta_ssc[1,:,1] = torch.Tensor([ 0,+d,-d, 0, 0, 0, 0, 0, 0, 0,-d,+d])/W
-  theta_ssc[1,:,2] = torch.Tensor([-d, 0, 0, 0,-d,+d, 0,+d, 0, 0, 0, 0])/D
-
-  theta_ssc = nn.Parameter(theta_ssc+torch.randn(2,12,3)*0.00).cuda()
-    
+  theta_ssc[1,:,2] = torch.Tensor([-d, 0, 0, 0,-d,+d, 0,+d, 0, 0, 0, 0])/D    
   C = theta_ssc.size(1)
-  H = img_in.size(2); W = img_in.size(3); D = img_in.size(4)
-  grid_x, grid_y, grid_z = torch.meshgrid((torch.linspace(-1,1,H),torch.linspace(-1,1,W),torch.linspace(-1,1,D)))
-  grid_x = grid_x.contiguous();grid_y = grid_y.contiguous();grid_z = grid_z.contiguous()
-  grid_xyz = torch.stack((grid_z.view(1,1,-1,1),grid_y.view(1,1,-1,1),grid_x.view(1,1,-1,1)),4).cuda()
-
-  sampled = F.grid_sample(img_in,grid_xyz + theta_ssc[0,:,:].view(1,-1,1,1,3)).view(1,C,H,W,D)
-  sampled -= F.grid_sample(img_in,grid_xyz + theta_ssc[1,:,:].view(1,-1,1,1,3)).view(1,C,H,W,D)
-  mind = F.avg_pool3d(torch.abs(sampled)**2,kernel_hw*2+1,stride=1,padding=kernel_hw)
-  mind -= torch.min(mind,1,keepdim=True)[0]   
-  mind /= (torch.sum(mind,1,keepdim=True)+0.001)
-  mind = torch.exp(-mind)
+  with torch.no_grad():
+    #create regular 3D sampling grid for all feature locations 
+    grid_xyz = F.affine_grid(torch.eye(3,4).unsqueeze(0),(1,1,H,W,D)).view(1,1,-1,1,3).cuda()
+    #compute patch distances with box-filter (as described in MIND paper) 
+    sampled = F.grid_sample(img_in,grid_xyz + theta_ssc[0,:,:].view(1,-1,1,1,3)).view(1,C,H,W,D)
+    sampled -= F.grid_sample(img_in,grid_xyz + theta_ssc[1,:,:].view(1,-1,1,1,3)).view(1,C,H,W,D)
+    mind = F.avg_pool3d(torch.abs(sampled)**2,kernel_hw*2+1,stride=1,padding=kernel_hw)
+    #use MIND equation to obtain contrast-invariant features for registration
+    mind -= torch.min(mind,1,keepdim=True)[0]   
+    mind /= (torch.sum(mind,1,keepdim=True)+0.001)
+    mind = torch.exp(-mind)
   del sampled; del grid_xyz
   torch.cuda.empty_cache()
   return mind
