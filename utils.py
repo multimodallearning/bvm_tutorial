@@ -128,6 +128,7 @@ def MINDSSC3d(img_in,kernel_hw=2, delta=3):
   theta_ssc[1,:,1] = torch.Tensor([ 0,+d,-d, 0, 0, 0, 0, 0, 0, 0,-d,+d])/W
   theta_ssc[1,:,2] = torch.Tensor([-d, 0, 0, 0,-d,+d, 0,+d, 0, 0, 0, 0])/D    
   C = theta_ssc.size(1)
+  theta_ssc = theta_ssc.cuda()
   with torch.no_grad():
     #create regular 3D sampling grid for all feature locations 
     grid_xyz = F.affine_grid(torch.eye(3,4).unsqueeze(0),(1,1,H,W,D)).view(1,1,-1,1,3).cuda()
@@ -139,7 +140,7 @@ def MINDSSC3d(img_in,kernel_hw=2, delta=3):
     mind -= torch.min(mind,1,keepdim=True)[0]   
     mind /= (torch.sum(mind,1,keepdim=True)+0.001)
     mind = torch.exp(-mind)
-  del sampled; del grid_xyz
+  del sampled; del grid_xyz; del theta_ssc;
   torch.cuda.empty_cache()
   return mind
 
