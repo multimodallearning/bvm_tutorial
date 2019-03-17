@@ -37,6 +37,18 @@ def visualise_sample_part1(axs, sample, result, is_training, epoch, every_epoch,
   axs[epoch//every_epoch][1 + offset].grid(False)
   return axs
 
+# initialise network weights
+def init_weights(m):
+    if isinstance(m, nn.Linear) or isinstance(m, nn.Conv3d) or isinstance(m, nn.ConvTranspose3d):
+        nn.init.xavier_normal_(m.weight)
+        if m.bias is not None:
+            nn.init.constant_(m.bias, 0.0)
+
+
+def countParam(model):
+    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    params = sum([np.prod(p.size()) for p in model_parameters])
+    return params
 
 # just a copied helper function from the last notebook...
 # used to downscale the 3D volumes
